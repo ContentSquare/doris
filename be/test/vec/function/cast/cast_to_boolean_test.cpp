@@ -319,9 +319,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL32};
         DataSet data_set = {
-                {{Decimal32 {1}}, UInt8(1)},    {{Decimal32 {0}}, UInt8(0)},
-                {{Decimal32 {+0}}, UInt8(0)},   {{Decimal32 {-0}}, UInt8(0)},
-                {{Decimal32 {-1}}, UInt8(1)},   {{Decimal32 {0.5}}, UInt8(1)},
+                {{Decimal32 {static_cast<int32_t>(1)}}, UInt8(1)},
+                {{Decimal32 {static_cast<int32_t>(0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(+0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(-0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(-1)}}, UInt8(1)},
+                {{Decimal32 {0.5}}, UInt8(1)},
                 {{Decimal32 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast<DataTypeBool>(input_types, data_set);
@@ -329,9 +332,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL64};
         DataSet data_set = {
-                {{Decimal64 {1}}, UInt8(1)},    {{Decimal64 {0}}, UInt8(0)},
-                {{Decimal64 {+0}}, UInt8(0)},   {{Decimal64 {-0}}, UInt8(0)},
-                {{Decimal64 {-1}}, UInt8(1)},   {{Decimal64 {0.5}}, UInt8(1)},
+                {{Decimal64 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal64 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal64 {0.5}}, UInt8(1)},
                 {{Decimal64 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast<DataTypeBool>(input_types, data_set);
@@ -340,9 +346,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMALV2};
         DataSet data_set = {
-                {{Decimal128V2 {1}}, UInt8(1)},    {{Decimal128V2 {0}}, UInt8(0)},
-                {{Decimal128V2 {+0}}, UInt8(0)},   {{Decimal128V2 {-0}}, UInt8(0)},
-                {{Decimal128V2 {-1}}, UInt8(1)},   {{Decimal128V2 {0.5}}, UInt8(1)},
+                {{Decimal128V2 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal128V2 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal128V2 {0.5}}, UInt8(1)},
                 {{Decimal128V2 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast<DataTypeBool>(input_types, data_set);
@@ -351,9 +360,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL128I};
         DataSet data_set = {
-                {{Decimal128V3 {1}}, UInt8(1)},    {{Decimal128V3 {0}}, UInt8(0)},
-                {{Decimal128V3 {+0}}, UInt8(0)},   {{Decimal128V3 {-0}}, UInt8(0)},
-                {{Decimal128V3 {-1}}, UInt8(1)},   {{Decimal128V3 {0.5}}, UInt8(1)},
+                {{Decimal128V3 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal128V3 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal128V3 {0.5}}, UInt8(1)},
                 {{Decimal128V3 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast<DataTypeBool>(input_types, data_set);
@@ -362,9 +374,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL256};
         DataSet data_set = {
-                {{Decimal256 {1}}, UInt8(1)},    {{Decimal256 {0}}, UInt8(0)},
-                {{Decimal256 {+0}}, UInt8(0)},   {{Decimal256 {-0}}, UInt8(0)},
-                {{Decimal256 {-1}}, UInt8(1)},   {{Decimal256 {0.5}}, UInt8(1)},
+                {{Decimal256 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal256 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal256 {0.5}}, UInt8(1)},
                 {{Decimal256 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast<DataTypeBool>(input_types, data_set);
@@ -375,9 +390,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool_strict_mode) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL32};
         DataSet data_set = {
-                {{Decimal32 {1}}, UInt8(1)},    {{Decimal32 {0}}, UInt8(0)},
-                {{Decimal32 {+0}}, UInt8(0)},   {{Decimal32 {-0}}, UInt8(0)},
-                {{Decimal32 {-1}}, UInt8(1)},   {{Decimal32 {0.5}}, UInt8(1)},
+                {{Decimal32 {static_cast<int32_t>(1)}}, UInt8(1)},
+                {{Decimal32 {static_cast<int32_t>(0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(+0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(-0)}}, UInt8(0)},
+                {{Decimal32 {static_cast<int32_t>(-1)}}, UInt8(1)},
+                {{Decimal32 {0.5}}, UInt8(1)},
                 {{Decimal32 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast_strict_mode<DataTypeBool>(input_types, data_set);
@@ -385,9 +403,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool_strict_mode) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL64};
         DataSet data_set = {
-                {{Decimal64 {1}}, UInt8(1)},    {{Decimal64 {0}}, UInt8(0)},
-                {{Decimal64 {+0}}, UInt8(0)},   {{Decimal64 {-0}}, UInt8(0)},
-                {{Decimal64 {-1}}, UInt8(1)},   {{Decimal64 {0.5}}, UInt8(1)},
+                {{Decimal64 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal64 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal64 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal64 {0.5}}, UInt8(1)},
                 {{Decimal64 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast_strict_mode<DataTypeBool>(input_types, data_set);
@@ -396,9 +417,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool_strict_mode) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMALV2};
         DataSet data_set = {
-                {{Decimal128V2 {1}}, UInt8(1)},    {{Decimal128V2 {0}}, UInt8(0)},
-                {{Decimal128V2 {+0}}, UInt8(0)},   {{Decimal128V2 {-0}}, UInt8(0)},
-                {{Decimal128V2 {-1}}, UInt8(1)},   {{Decimal128V2 {0.5}}, UInt8(1)},
+                {{Decimal128V2 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal128V2 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal128V2 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal128V2 {0.5}}, UInt8(1)},
                 {{Decimal128V2 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast_strict_mode<DataTypeBool>(input_types, data_set);
@@ -407,9 +431,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool_strict_mode) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL128I};
         DataSet data_set = {
-                {{Decimal128V3 {1}}, UInt8(1)},    {{Decimal128V3 {0}}, UInt8(0)},
-                {{Decimal128V3 {+0}}, UInt8(0)},   {{Decimal128V3 {-0}}, UInt8(0)},
-                {{Decimal128V3 {-1}}, UInt8(1)},   {{Decimal128V3 {0.5}}, UInt8(1)},
+                {{Decimal128V3 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal128V3 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal128V3 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal128V3 {0.5}}, UInt8(1)},
                 {{Decimal128V3 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast_strict_mode<DataTypeBool>(input_types, data_set);
@@ -418,9 +445,12 @@ TEST_F(FunctionCastTest, test_from_decimal_to_bool_strict_mode) {
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DECIMAL256};
         DataSet data_set = {
-                {{Decimal256 {1}}, UInt8(1)},    {{Decimal256 {0}}, UInt8(0)},
-                {{Decimal256 {+0}}, UInt8(0)},   {{Decimal256 {-0}}, UInt8(0)},
-                {{Decimal256 {-1}}, UInt8(1)},   {{Decimal256 {0.5}}, UInt8(1)},
+                {{Decimal256 {static_cast<int64_t>(1)}}, UInt8(1)},
+                {{Decimal256 {static_cast<int64_t>(0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(+0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(-0)}}, UInt8(0)},
+                {{Decimal256 {static_cast<int64_t>(-1)}}, UInt8(1)},
+                {{Decimal256 {0.5}}, UInt8(1)},
                 {{Decimal256 {-0.5}}, UInt8(1)},
         };
         check_function_for_cast_strict_mode<DataTypeBool>(input_types, data_set);

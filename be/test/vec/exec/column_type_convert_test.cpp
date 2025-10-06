@@ -325,8 +325,8 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto& src_data = src_col->get_data();
         // Test normal values
         src_data.resize(0);
-        src_data.push_back(Decimal32(12345));  // 123.45
-        src_data.push_back(Decimal32(-12345)); // -123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(12345)));   // 123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(-12345)));  // -123.45
 
         auto dst_col = dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -355,8 +355,8 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         src_col->resize(0);
         auto& src_data = src_col->get_data();
         // Test normal values
-        src_data.push_back(Decimal32(12345));  // 123.45
-        src_data.push_back(Decimal32(-67890)); // -678.90
+        src_data.push_back(Decimal32(static_cast<int32_t>(12345)));   // 123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(-67890)));  // -678.90
 
         auto dst_col = dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -387,8 +387,8 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto& src_data = src_col->get_data();
 
         // Add test values
-        src_data.push_back(Decimal64(12345678901234));  // Normal value: 1234567890.1234
-        src_data.push_back(Decimal64(-98765432109876)); // Negative value: -9876543210.9876
+        src_data.push_back(Decimal64(static_cast<int64_t>(12345678901234LL)));   // Normal value: 1234567890.1234
+        src_data.push_back(Decimal64(static_cast<int64_t>(-98765432109876LL)));  // Negative value: -9876543210.9876
 
         auto dst_col = dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -421,9 +421,9 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto src_col = ColumnDecimal32::create(9, 2);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal32(12345));  // 123.45
-        src_data.push_back(Decimal32(-12345)); // -123.45
-        src_data.push_back(Decimal32(23345));  // Too large 233.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(12345)));   // 123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(-12345)));  // -123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(23345)));   // Too large 233.45
 
         auto dst_col = nullable_dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -460,9 +460,9 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto src_col = ColumnDecimal128V3::create(36, 4);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal128V3(102345));
-        src_data.push_back(Decimal128V3(-102345));
-        src_data.push_back(Decimal128V3(203345));
+        src_data.push_back(Decimal128V3(static_cast<int64_t>(102345)));
+        src_data.push_back(Decimal128V3(static_cast<int64_t>(-102345)));
+        src_data.push_back(Decimal128V3(static_cast<int64_t>(203345)));
 
         auto dst_col = nullable_dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -499,12 +499,12 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto src_col = ColumnDecimal256::create(70, 4);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal256(-102345));
-        src_data.push_back(Decimal256(203345));
-        src_data.push_back(Decimal256(327673345));
-        src_data.push_back(Decimal256(655353345));
-        src_data.push_back(Decimal256(655363345));
-        src_data.push_back(Decimal256(3333333333332345));
+        src_data.push_back(Decimal256(static_cast<int64_t>(-102345)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(203345)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(327673345)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(655353345)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(655363345)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(3333333333332345LL)));
 
         auto dst_col = nullable_dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -671,11 +671,11 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto& src_data = src_col->get_data();
         src_data.resize(0);
         // Add test values
-        src_data.push_back(Decimal64(1234567890));  // In range
-        src_data.push_back(Decimal64(999999999));   // Edge case: max for Decimal32
-        src_data.push_back(Decimal64(1000000000));  // Out of range (overflow)
-        src_data.push_back(Decimal64(-999999999));  // Edge case: negative max for Decimal32
-        src_data.push_back(Decimal64(-1000000000)); // Out of range (underflow)
+        src_data.push_back(Decimal64(static_cast<int64_t>(1234567890)));   // In range
+        src_data.push_back(Decimal64(static_cast<int64_t>(999999999)));    // Edge case: max for Decimal32
+        src_data.push_back(Decimal64(static_cast<int64_t>(1000000000)));   // Out of range (overflow)
+        src_data.push_back(Decimal64(static_cast<int64_t>(-999999999)));   // Edge case: negative max for Decimal32
+        src_data.push_back(Decimal64(static_cast<int64_t>(-1000000000)));  // Out of range (underflow)
 
         auto dst_col = nullable_dst_type->create_column();
         auto mutable_dst = dst_col->assume_mutable();
@@ -705,9 +705,9 @@ TEST_F(ColumnTypeConverterTest, TestDecimalConversions) {
         auto& src_data = src_col->get_data();
         // Add test values
         src_data.resize(0);
-        src_data.push_back(Decimal64(123456789));  // In range
-        src_data.push_back(Decimal64(999999999));  // Edge case: max for Decimal32
-        src_data.push_back(Decimal64(-999999999)); // Edge case: negative max for Decimal32
+        src_data.push_back(Decimal64(static_cast<int64_t>(123456789)));   // In range
+        src_data.push_back(Decimal64(static_cast<int64_t>(999999999)));   // Edge case: max for Decimal32
+        src_data.push_back(Decimal64(static_cast<int64_t>(-999999999)));  // Edge case: negative max for Decimal32
         ASSERT_EQ(3, src_data.size());
         auto dst_col = nullable_dst_type->create_column();
         dst_col->resize(0);
@@ -946,9 +946,9 @@ TEST_F(ColumnTypeConverterTest, TestStringConversions) {
         auto& src_data = src_col->get_data();
         // Add test values
         src_data.resize(0);
-        src_data.push_back(Decimal32(12345));  // 123.45
-        src_data.push_back(Decimal32(-67890)); // -678.90
-        src_data.push_back(Decimal32(0));      // Zero
+        src_data.push_back(Decimal32(static_cast<int32_t>(12345)));   // 123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(-67890)));  // -678.90
+        src_data.push_back(Decimal32(static_cast<int32_t>(0)));       // Zero
 
         auto dst_col = dst_type->create_column();
         dst_col->resize(0);

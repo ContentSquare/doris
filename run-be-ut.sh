@@ -154,6 +154,13 @@ update_submodule() {
     exit_code=$?
     set -e
     if [[ "${exit_code}" -ne 0 ]]; then
+        local target_dir="${DORIS_HOME}/${submodule_path}"
+        if [[ -d "${target_dir}" ]]; then
+            if ls -A "${target_dir}" >/dev/null 2>&1; then
+                echo "Update ${submodule_name} submodule failed, but ${target_dir} already contains files. Skip remote fetch."
+                return
+            fi
+        fi
         # try to get submodule's current commit
         submodule_commit=$(git ls-tree HEAD "${submodule_path}" | awk '{print $3}')
 
@@ -161,7 +168,10 @@ update_submodule() {
         echo "Update ${submodule_name} submodule failed, start to download and extract ${commit_specific_url}"
 
         mkdir -p "${DORIS_HOME}/${submodule_path}"
-        curl -L "${commit_specific_url}" | tar -xz -C "${DORIS_HOME}/${submodule_path}" --strip-components=1
+        if ! curl -L "${commit_specific_url}" | tar -xz -C "${DORIS_HOME}/${submodule_path}" --strip-components=1; then
+            echo "Download ${submodule_name} submodule failed. Please ensure ${target_dir} is populated manually."
+            exit 1
+        fi
     fi
 }
 

@@ -346,11 +346,32 @@ build_libevent() {
     mkdir -p "${BUILD_DIR}"
     cd "${BUILD_DIR}"
 
+    local openssl_ssl_lib="${TP_LIB_DIR}/libssl.a"
+    local openssl_crypto_lib="${TP_LIB_DIR}/libcrypto.a"
+    if [[ ! -f "${openssl_ssl_lib}" || ! -f "${openssl_crypto_lib}" ]]; then
+        echo "OpenSSL static libraries are missing in ${TP_LIB_DIR}. Please build openssl first."
+        exit 1
+    fi
+
+    local cmake_policy_args=""
+    local cmake_version
+    cmake_version="$(${CMAKE_CMD} --version 2>/dev/null | head -n1 | awk '{print $3}')"
+    if [[ ${cmake_version} =~ ^([0-9]+)\.([0-9]+) ]]; then
+        local cmake_major="${BASH_REMATCH[1]}"
+        local cmake_minor="${BASH_REMATCH[2]}"
+        if (( cmake_major > 3 )) || (( cmake_major == 3 && cmake_minor >= 25 )); then
+            cmake_policy_args="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+        fi
+    fi
+
     CFLAGS="-std=c99 -D_BSD_SOURCE -fno-omit-frame-pointer -g -ggdb -O2 -I${TP_INCLUDE_DIR}" \
-        CPPLAGS="-I${TP_INCLUDE_DIR}" \
+        CPPFLAGS="-I${TP_INCLUDE_DIR}" \
         LDFLAGS="-L${TP_LIB_DIR}" \
-        "${CMAKE_CMD}" -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${TP_INSTALL_DIR}" -DEVENT__DISABLE_TESTS=ON \
-        -DEVENT__DISABLE_SAMPLES=ON -DEVENT__DISABLE_REGRESS=ON ..
+        "${CMAKE_CMD}" -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${TP_INSTALL_DIR}" \
+        ${cmake_policy_args:+${cmake_policy_args}} \
+        -DEVENT__DISABLE_TESTS=ON -DEVENT__DISABLE_SAMPLES=ON -DEVENT__DISABLE_REGRESS=ON \
+        -DOPENSSL_ROOT_DIR="${TP_INSTALL_DIR}" -DOPENSSL_USE_STATIC_LIBS=TRUE \
+        -DOPENSSL_SSL_LIBRARY="${openssl_ssl_lib}" -DOPENSSL_CRYPTO_LIBRARY="${openssl_crypto_lib}" ..
 
     "${BUILD_SYSTEM}" -j "${PARALLEL}"
     "${BUILD_SYSTEM}" install

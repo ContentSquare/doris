@@ -75,7 +75,7 @@ TEST(DecimalTest, Decimal256) {
 
     // divide
     dec1 = type_limit<vectorized::Decimal256>::max();
-    dec2 = vectorized::Decimal256(10);
+    dec2 = vectorized::Decimal256(static_cast<int64_t>(10));
     dec3 = dec1 / dec2;
     des_str = dec3.to_string(1);
     EXPECT_EQ(des_str,
@@ -88,16 +88,16 @@ TEST(DecimalTest, compare) {
     Decimal256 dec_max(type_limit<vectorized::Decimal256>::max());
     Decimal256 dec_min(type_limit<vectorized::Decimal256>::min());
 
-    Decimal256 dec3 = vectorized::Decimal256(10);
-    Decimal256 dec4 = vectorized::Decimal256(9);
-    Decimal256 dec5 = vectorized::Decimal256(-10);
+    Decimal256 dec3 = vectorized::Decimal256(static_cast<int64_t>(10));
+    Decimal256 dec4 = vectorized::Decimal256(static_cast<int64_t>(9));
+    Decimal256 dec5 = vectorized::Decimal256(static_cast<int64_t>(-10));
 
     Decimal256 dec_max2(type_limit<vectorized::Decimal256>::max());
     Decimal256 dec_min2(type_limit<vectorized::Decimal256>::min());
 
-    Decimal256 dec3_2 = vectorized::Decimal256(10);
-    Decimal256 dec4_2 = vectorized::Decimal256(9);
-    Decimal256 dec5_2 = vectorized::Decimal256(-10);
+    Decimal256 dec3_2 = vectorized::Decimal256(static_cast<int64_t>(10));
+    Decimal256 dec4_2 = vectorized::Decimal256(static_cast<int64_t>(9));
+    Decimal256 dec5_2 = vectorized::Decimal256(static_cast<int64_t>(-10));
 
     EXPECT_EQ(dec_max, dec_max2);
     EXPECT_EQ(dec_min, dec_min2);
@@ -163,8 +163,8 @@ TEST(DecimalTest, crc32) {
     auto col = data_type.create_column();
     Decimal256 dec_max(type_limit<vectorized::Decimal256>::max());
     Decimal256 dec_min(type_limit<vectorized::Decimal256>::min());
-    Decimal256 dec3 = vectorized::Decimal256(1);
-    Decimal256 dec4 = vectorized::Decimal256(-1);
+    Decimal256 dec3 = vectorized::Decimal256(static_cast<int64_t>(1));
+    Decimal256 dec4 = vectorized::Decimal256(static_cast<int64_t>(-1));
     auto& decimal_data = ((vectorized::ColumnDecimal256*)col.get())->get_data();
     decimal_data.push_back(dec_max);
     decimal_data.push_back(dec_min);
@@ -194,8 +194,8 @@ TEST(DecimalTest, crc32) {
 TEST(DecimalTest, hash) {
     Decimal256 dec_max(type_limit<vectorized::Decimal256>::max());
     Decimal256 dec_min(type_limit<vectorized::Decimal256>::min());
-    Decimal256 dec3 = vectorized::Decimal256(12345);
-    Decimal256 dec4 = vectorized::Decimal256(-12345);
+    Decimal256 dec3 = vectorized::Decimal256(static_cast<int64_t>(12345));
+    Decimal256 dec4 = vectorized::Decimal256(static_cast<int64_t>(-12345));
 
     {
         auto hash_op = std::hash<vectorized::Decimal256>();

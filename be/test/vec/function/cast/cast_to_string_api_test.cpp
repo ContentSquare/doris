@@ -61,27 +61,27 @@ TEST(CastToStringTest, test) {
         EXPECT_EQ(str, "-123456789.9876543");
     }
     {
-        Decimal32 num = 123456789;
+        Decimal32 num = Decimal32(static_cast<int32_t>(123456789));
         std::string str = CastToString::from_decimal(num, 2);
         EXPECT_EQ(str, "1234567.89");
     }
     {
-        Decimal64 num = -123456789012345678;
+        Decimal64 num = Decimal64(static_cast<int64_t>(-123456789012345678LL));
         std::string str = CastToString::from_decimal(num, 4);
         EXPECT_EQ(str, "-12345678901234.5678");
     }
     {
-        Decimal128V2 num = 1234567890123;
+        Decimal128V2 num = Decimal128V2(static_cast<int64_t>(1234567890123LL));
         std::string str = CastToString::from_decimal(num, 6);
         EXPECT_EQ(str, "1234.567890");
     }
     {
-        Decimal128V3 num = 1234567890567890;
+        Decimal128V3 num = Decimal128V3(static_cast<int64_t>(1234567890567890LL));
         std::string str = CastToString::from_decimal(num, 8);
         EXPECT_EQ(str, "12345678.90567890");
     }
     {
-        Decimal256 num {1234567890567890};
+        Decimal256 num {static_cast<int64_t>(1234567890567890LL)};
         std::string str = CastToString::from_decimal(num, 10);
         EXPECT_EQ(str, "123456.7890567890");
     }

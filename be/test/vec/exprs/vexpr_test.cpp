@@ -674,8 +674,8 @@ TEST(TEST_VEXPR, LITERALTEST) {
         auto src_col = ColumnDecimal32::create(9, 2);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal32(12345));  // 123.45
-        src_data.push_back(Decimal32(-12345)); // -123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(12345)));   // 123.45
+        src_data.push_back(Decimal32(static_cast<int32_t>(-12345)));  // -123.45
         {
             auto node = std::make_shared<VLiteral>(
                     create_texpr_node_from(src_col->operator[](0), TYPE_DECIMAL32, 9, 2), true);
@@ -693,8 +693,8 @@ TEST(TEST_VEXPR, LITERALTEST) {
         auto src_col = ColumnDecimal64::create(18, 4);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal64(123456789));  // 12345.6789
-        src_data.push_back(Decimal64(-123456789)); // -12345.6789
+        src_data.push_back(Decimal64(static_cast<int64_t>(123456789)));   // 12345.6789
+        src_data.push_back(Decimal64(static_cast<int64_t>(-123456789)));  // -12345.6789
         {
             auto node = std::make_shared<VLiteral>(
                     create_texpr_node_from(src_col->operator[](0), TYPE_DECIMAL64, 18, 4), true);
@@ -711,8 +711,8 @@ TEST(TEST_VEXPR, LITERALTEST) {
         auto src_col = ColumnDecimal128V3::create(38, 6);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal128V3(123456789012345));
-        src_data.push_back(Decimal128V3(-123456789012345));
+        src_data.push_back(Decimal128V3(static_cast<int64_t>(123456789012345LL)));
+        src_data.push_back(Decimal128V3(static_cast<int64_t>(-123456789012345LL)));
         {
             auto node = std::make_shared<VLiteral>(
                     create_texpr_node_from(src_col->operator[](0), TYPE_DECIMAL128I, 38, 6), true);
@@ -729,8 +729,8 @@ TEST(TEST_VEXPR, LITERALTEST) {
         auto src_col = ColumnDecimal256::create(76, 8);
         auto& src_data = src_col->get_data();
         src_data.resize(0);
-        src_data.push_back(Decimal256(1));
-        src_data.push_back(Decimal256(123456789));
+        src_data.push_back(Decimal256(static_cast<int64_t>(1)));
+        src_data.push_back(Decimal256(static_cast<int64_t>(123456789)));
         {
             auto node = std::make_shared<VLiteral>(
                     create_texpr_node_from(src_col->operator[](0), TYPE_DECIMAL256, 76, 8), true);

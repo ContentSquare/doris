@@ -249,7 +249,8 @@ TEST_F(RuntimeFilterWrapperTest, TestInAssign) {
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL32);
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL64);
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL128I);
-    APPLY_FOR_PRIMITIVE_TYPE(TYPE_DECIMAL256, vectorized::Decimal256(0), vectorized::Decimal256(1));
+    APPLY_FOR_PRIMITIVE_TYPE(TYPE_DECIMAL256, vectorized::Decimal256(static_cast<int64_t>(0)),
+                             vectorized::Decimal256(static_cast<int64_t>(1)));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_VARCHAR, StringRef("1"), StringRef("2"));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_CHAR, StringRef("1"), StringRef("2"));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_STRING, StringRef("1"), StringRef("2"));
@@ -332,7 +333,8 @@ TEST_F(RuntimeFilterWrapperTest, TestMinMaxAssign) {
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL32);
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL64);
     APPLY_FOR_PRIMITIVE_BASE_TYPE(TYPE_DECIMAL128I);
-    APPLY_FOR_PRIMITIVE_TYPE(TYPE_DECIMAL256, vectorized::Decimal256(0), vectorized::Decimal256(1));
+    APPLY_FOR_PRIMITIVE_TYPE(TYPE_DECIMAL256, vectorized::Decimal256(static_cast<int64_t>(0)),
+                             vectorized::Decimal256(static_cast<int64_t>(1)));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_VARCHAR, StringRef("1"), StringRef("2"));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_CHAR, StringRef("1"), StringRef("2"));
     APPLY_FOR_PRIMITIVE_TYPE(TYPE_STRING, StringRef("1"), StringRef("2"));

@@ -3016,7 +3016,8 @@ public:
         EXPECT_TRUE(status.ok()) << status;
 
         for (const auto& value : values) {
-            status = column_writer->add_values(column.name(), reinterpret_cast<const void*>(&value),
+            bool bool_value = value;
+            status = column_writer->add_values(column.name(), reinterpret_cast<const void*>(bool_value),
                                                1);
             EXPECT_TRUE(status.ok()) << status;
         }
