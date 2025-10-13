@@ -38,6 +38,7 @@
 #include "common/logging.h"
 #include "common/object_pool.h"
 #include "common/status.h"
+#include "io/cache/cached_remote_file_reader.h"
 #include "io/fs/file_reader.h"
 #include "io/io_common.h"
 #include "olap/bloom_filter_predicate.h"
@@ -435,11 +436,22 @@ Status SegmentIterator::_lazy_init(vectorized::Block* block) {
         _range_iter.reset(new BitmapRangeIterator(_row_bitmap));
     }
 
+    if (config::enable_segment_iterator_prefetch) {
+        if (_opts.read_orderby_key_reverse) {
+            _prefetch_range_iter.reset(new BackwardBitmapRangeIterator(_row_bitmap));
+        } else {
+            _prefetch_range_iter.reset(new BitmapRangeIterator(_row_bitmap));
+        }
+    } else {
+        _prefetch_range_iter.reset();
+    }
+
     // If the row bitmap size is smaller than block_row_max, there's no need to reserve that many column rows.
     auto nrows_reserve_limit = std::min(_row_bitmap.cardinality(), uint64_t(_opts.block_row_max));
     if (_lazy_materialization_read || _opts.record_rowids || _is_need_expr_eval) {
         _block_rowids.resize(_opts.block_row_max);
     }
+    _block_rowids_prefetch.resize(_opts.block_row_max);
     _current_return_columns.resize(_schema->columns().size());
 
     _vec_init_char_column_id(block);
@@ -492,6 +504,14 @@ Status SegmentIterator::_lazy_init(vectorized::Block* block) {
     }
 
     _lazy_inited = true;
+
+    // Issue first prefetch after initialization
+    Status prefetch_status = _prefetch_pages_for_next_batch();
+    if (!prefetch_status.ok()) {
+        // Prefetch is best-effort, log but don't fail initialization
+        VLOG(1) << "Initial prefetch failed: " << prefetch_status.to_string();
+    }
+
     return Status::OK();
 }
 
@@ -2050,6 +2070,13 @@ Status SegmentIterator::_output_non_pred_columns(vectorized::Block* block) {
  * rowid sequences and handling discontinuities gracefully in smaller chunks.
  */
 Status SegmentIterator::_read_columns_by_index(uint32_t nrows_read_limit, uint16_t& nrows_read) {
+    // Issue prefetch for next batch after current read completes
+    Status prefetch_status = _prefetch_pages_for_next_batch();
+    if (!prefetch_status.ok()) {
+        // Prefetch is best-effort, log but don't fail the read
+        VLOG(1) << "Prefetch for next batch failed: " << prefetch_status.to_string();
+    }
+
     SCOPED_RAW_TIMER(&_opts.stats->predicate_column_read_ns);
 
     nrows_read = (uint16_t)_range_iter->read_batch_rowids(_block_rowids.data(), nrows_read_limit);
@@ -2999,6 +3026,181 @@ void SegmentIterator::_prepare_score_column_materialization() {
     auto* virtual_column_iter = dynamic_cast<VirtualColumnIterator*>(column_iter);
     virtual_column_iter->prepare_materialization(std::move(result_column),
                                                  std::move(result_row_ids));
+}
+
+uint16_t SegmentIterator::_get_next_prefetch_rowids() {
+    if (!_prefetch_range_iter || !_prefetch_range_iter->has_more_range()) {
+        return 0;
+    }
+
+    uint32_t nrows_read_limit =
+            std::min(cast_set<uint32_t>(_row_bitmap.cardinality()), _opts.block_row_max);
+    uint16_t nrows_prefetch = (uint16_t)_prefetch_range_iter->read_batch_rowids(
+            _block_rowids_prefetch.data(), nrows_read_limit);
+
+    return nrows_prefetch;
+}
+
+Status SegmentIterator::_collect_pages_for_column(
+        ColumnId cid, const std::vector<rowid_t>& sorted_rowids,
+        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch) {
+    // Skip virtual columns - they have no pages
+    if (_virtual_column_exprs.contains(cid)) {
+        return Status::OK();
+    }
+
+    // Reuse ColumnReader instances across prefetch batches
+    const TabletColumn& tablet_col = _opts.tablet_schema->column(cid);
+    std::shared_ptr<ColumnReader> column_reader;
+    auto cached_reader = _prefetch_column_readers.find(cid);
+    if (cached_reader != _prefetch_column_readers.end()) {
+        column_reader = cached_reader->second;
+    } else {
+        Status st = _segment->_column_reader_cache->get_column_reader(tablet_col.unique_id(),
+                                                                      &column_reader, _opts.stats);
+        if (!st.ok()) {
+            VLOG_DEBUG << fmt::format("Prefetch: Failed to get column reader for cid {}", cid);
+            return Status::OK();
+        }
+        _prefetch_column_readers.emplace(cid, column_reader);
+    }
+
+    if (!column_reader) {
+        return Status::OK();
+    }
+
+    // Setup iterator options
+    ColumnIteratorOptions iter_opts;
+    iter_opts.file_reader = _file_reader.get();
+    iter_opts.stats = _opts.stats;
+    iter_opts.io_ctx = _opts.io_ctx;
+
+    // For contiguous blocks, sorted_rowids contains [first, last]
+    // Find page for first rowid, then iterate pages until we cover last rowid
+    ordinal_t first_rowid = sorted_rowids[0];
+    ordinal_t last_rowid = sorted_rowids[sorted_rowids.size() - 1];
+
+    // Find page containing first rowid
+    OrdinalPageIndexIterator page_iter;
+    Status s = column_reader->seek_at_or_before(first_rowid, &page_iter, iter_opts);
+    if (!s.ok() || !page_iter.valid()) {
+        VLOG_DEBUG << fmt::format("Prefetch: Failed to seek to first ordinal {} for cid {}",
+                                  first_rowid, cid);
+        return Status::OK();
+    }
+
+    // Collect all pages from first_rowid to last_rowid
+    while (page_iter.valid() && page_iter.first_ordinal() <= last_rowid) {
+        const PagePointer& pp = page_iter.page();
+        pages_to_prefetch->insert({pp.offset, pp.size});
+
+        VLOG_DEBUG << fmt::format(
+                "Prefetch: Column {} page {} covers ordinals [{}, {}], offset={}, size={}", cid,
+                page_iter.page_index(), page_iter.first_ordinal(), page_iter.last_ordinal(),
+                pp.offset, pp.size);
+
+        // Move to next page
+        page_iter.next();
+    }
+
+    return Status::OK();
+}
+
+Status SegmentIterator::_issue_prefetch_requests(
+        const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch) {
+    // Try to downcast to CachedRemoteFileReader
+    // auto* cached_reader = dynamic_cast<io::CachedRemoteFileReader*>(_file_reader.get());
+    // if (!cached_reader) {
+    //     VLOG_DEBUG << "Prefetch: FileReader is not CachedRemoteFileReader, skipping prefetch";
+    //     return Status::OK();
+    // }
+
+    // Issue prefetch for each unique page
+    size_t pages_prefetched = 0;
+    for (const auto& [offset, size] : pages_to_prefetch) {
+        // Skip if already prefetched
+        if (_prefetched_pages.contains({offset, size})) {
+            continue;
+        }
+
+        // Issue read to populate cache (data will be discarded)
+        std::vector<char> temp_buffer(0);
+        Slice result(temp_buffer.data(), size);
+        size_t bytes_read = 0;
+
+        Status s = _file_reader->read_at(offset, result, &bytes_read, &_opts.io_ctx);
+        if (s.ok()) {
+            _prefetched_pages.insert({offset, size});
+            pages_prefetched++;
+            VLOG_DEBUG << fmt::format("Prefetch: Successfully prefetched page offset={}, size={}",
+                                      offset, size);
+        } else {
+            // Log but don't fail - prefetch is best-effort
+            VLOG(1) << fmt::format("Prefetch: Failed to prefetch page offset={}, size={}: {}",
+                                   offset, size, s.to_string());
+        }
+    }
+
+    VLOG_DEBUG << fmt::format("Prefetch: Prefetched {} pages out of {} unique pages",
+                              pages_prefetched, pages_to_prefetch.size());
+
+    return Status::OK();
+}
+
+Status SegmentIterator::_prefetch_pages_for_next_batch() {
+    if (!config::enable_segment_iterator_prefetch ||
+        config::segment_iterator_prefetch_lookahead <= 0) {
+        return Status::OK();
+    }
+
+    SCOPED_RAW_TIMER(&_opts.stats->block_init_ns);
+
+    for (int lookahead = 0; lookahead < config::segment_iterator_prefetch_lookahead;
+         ++lookahead) {
+        // Step 1: Read next batch of rowids using prefetch iterator
+        uint16_t nrows_prefetch = _get_next_prefetch_rowids();
+        if (nrows_prefetch == 0) {
+            break;
+        }
+
+        // Step 2: Check if rowids are contiguous (same logic as _read_columns_by_index)
+        bool is_continuous = (nrows_prefetch > 1) &&
+                             (_block_rowids_prefetch[nrows_prefetch - 1] -
+                                      _block_rowids_prefetch[0] ==
+                              nrows_prefetch - 1);
+
+        if (!is_continuous) {
+            // For prefetch, only support contiguous blocks to simplify implementation
+            VLOG_DEBUG << fmt::format(
+                    "Prefetch: Skipping non-contiguous block (nrows={}, first={}, last={})",
+                    nrows_prefetch, _block_rowids_prefetch[0],
+                    _block_rowids_prefetch[nrows_prefetch - 1]);
+            continue;
+        }
+
+        VLOG_DEBUG << fmt::format("Prefetch: read {} contiguous rowids [{}, {}]",
+                                  nrows_prefetch, _block_rowids_prefetch[0],
+                                  _block_rowids_prefetch[nrows_prefetch - 1]);
+
+        // Step 3: For contiguous blocks, just use first and last rowid (no sorting needed)
+        std::vector<rowid_t> rowid_range = {_block_rowids_prefetch[0],
+                                            _block_rowids_prefetch[nrows_prefetch - 1]};
+
+        // Step 4: Collect unique pages needed across all predicate columns
+        std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
+
+        for (auto cid : _predicate_column_ids) {
+            RETURN_IF_ERROR(_collect_pages_for_column(cid, rowid_range, &pages_to_prefetch));
+        }
+
+        VLOG_DEBUG << fmt::format("Prefetch: {} unique pages to prefetch",
+                                  pages_to_prefetch.size());
+
+        // Step 5: Issue prefetch requests
+        RETURN_IF_ERROR(_issue_prefetch_requests(pages_to_prefetch));
+    }
+
+    return Status::OK();
 }
 
 } // namespace segment_v2

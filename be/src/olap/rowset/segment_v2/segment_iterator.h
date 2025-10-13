@@ -70,6 +70,7 @@ struct RowLocation;
 namespace segment_v2 {
 
 class BitmapIndexIterator;
+class ColumnReader;
 class ColumnIterator;
 class InvertedIndexIterator;
 class RowRanges;
@@ -381,6 +382,19 @@ private:
     Status _materialization_of_virtual_column(vectorized::Block* block);
     void _prepare_score_column_materialization();
 
+    // Prefetch pages for next batch of rowids
+    Status _prefetch_pages_for_next_batch();
+
+    // Helper: Get next batch of rowids to prefetch
+    uint16_t _get_next_prefetch_rowids();
+
+    // Helper: Collect page offsets needed for a column given rowids
+    Status _collect_pages_for_column(ColumnId cid, const std::vector<rowid_t>& sorted_rowids,
+                                     std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch);
+
+    // Helper: Issue prefetch requests to CachedRemoteFileReader
+    Status _issue_prefetch_requests(const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch);
+
     class BitmapRangeIterator;
     class BackwardBitmapRangeIterator;
 
@@ -393,10 +407,12 @@ private:
     std::vector<std::unique_ptr<ColumnIterator>> _column_iterators;
     std::vector<std::unique_ptr<BitmapIndexIterator>> _bitmap_index_iterators;
     std::vector<std::unique_ptr<IndexIterator>> _index_iterators;
+    std::unordered_map<ColumnId, std::shared_ptr<ColumnReader>> _prefetch_column_readers;
     // after init(), `_row_bitmap` contains all rowid to scan
     roaring::Roaring _row_bitmap;
     // an iterator for `_row_bitmap` that can be used to extract row range to scan
     std::unique_ptr<BitmapRangeIterator> _range_iter;
+    std::unique_ptr<BitmapRangeIterator> _prefetch_range_iter;
     // the next rowid to read
     rowid_t _cur_rowid;
     // members related to lazy materialization read
@@ -409,6 +425,8 @@ private:
     // remember the rowids we've read for the current row block.
     // could be a local variable of next_batch(), kept here to reuse vector memory
     std::vector<rowid_t> _block_rowids;
+    // TODO init
+    std::vector<rowid_t> _block_rowids_prefetch;
     bool _is_need_vec_eval = false;
     bool _is_need_short_eval = false;
     bool _is_need_expr_eval = false;
@@ -506,6 +524,9 @@ private:
 
     // key is column uid, value is the sparse column cache
     std::unordered_map<int32_t, PathToSparseColumnCacheUPtr> _variant_sparse_column_cache;
+
+    // Prefetch tracking: (offset, size) pairs already prefetched
+    std::set<std::pair<uint64_t, uint32_t>> _prefetched_pages;
 };
 
 } // namespace segment_v2
