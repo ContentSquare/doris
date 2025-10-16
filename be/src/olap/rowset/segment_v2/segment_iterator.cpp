@@ -3128,7 +3128,10 @@ Status SegmentIterator::_issue_prefetch_requests(
         Slice result(temp_buffer.data(), size);
         size_t bytes_read = 0;
 
-        Status s = _file_reader->read_at(offset, result, &bytes_read, &_opts.io_ctx);
+        auto io_ctx_copy = _opts.io_ctx;
+        io_ctx_copy.is_dryrun = true;
+
+        Status s = _file_reader->read_at(offset, result, &bytes_read, &io_ctx_copy);
         if (s.ok()) {
             _prefetched_pages.insert({offset, size});
             pages_prefetched++;
