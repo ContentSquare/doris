@@ -35,6 +35,7 @@
 #include "common/config.h"
 #include "common/consts.h"
 #include "common/exception.h"
+#include "common/cast_set.h"
 #include "common/logging.h"
 #include "common/object_pool.h"
 #include "common/status.h"
