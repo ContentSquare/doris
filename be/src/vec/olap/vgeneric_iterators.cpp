@@ -429,32 +429,42 @@ Status VUnionIterator::init(const StorageReadOptions& opts) {
     _read_options = opts;
     _cur_iter = std::move(_origin_iters.back());
     RETURN_IF_ERROR(_cur_iter->init(_read_options));
+    if (auto* planner = dynamic_cast<PrefetchPlanner*>(_cur_iter.get())) {
+        std::set<std::pair<uint64_t, uint32_t>> pages;
+        bool has_more = false;
+        RETURN_IF_ERROR(planner->prepare_prefetch_batch(&pages, &has_more));
+        if (!pages.empty()) {
+            RETURN_IF_ERROR(planner->submit_prefetch_batch(pages));
+        }
+    }
     _schema = &_cur_iter->schema();
     return Status::OK();
 }
 
 Status VUnionIterator::next_batch(Block* block) {
-    while (_cur_iter != nullptr) {
-        if (auto* planner = dynamic_cast<PrefetchPlanner*>(_cur_iter.get())) {
-            std::set<std::pair<uint64_t, uint32_t>> pages;
-            bool has_more = false;
-            Status st = planner->prepare_prefetch_batch(&pages, &has_more);
-            if (!st.ok()) {
-                return st;
-            }
-            if (!pages.empty()) {
-                st = planner->submit_prefetch_batch(pages);
-                if (!st.ok()) {
-                    return st;
-                }
-            }
+    auto trigger_prefetch = [](RowwiseIterator* iter) -> Status {
+        auto* planner = dynamic_cast<PrefetchPlanner*>(iter);
+        if (planner == nullptr) {
+            return Status::OK();
         }
+        std::set<std::pair<uint64_t, uint32_t>> pages;
+        bool has_more = false;
+        RETURN_IF_ERROR(planner->prepare_prefetch_batch(&pages, &has_more));
+        if (pages.empty()) {
+            return Status::OK();
+        }
+        return planner->submit_prefetch_batch(pages);
+    };
+
+    while (_cur_iter != nullptr) {
+        RETURN_IF_ERROR(trigger_prefetch(_cur_iter.get()));
         auto st = _cur_iter->next_batch(block);
         if (st.is<END_OF_FILE>()) {
             _origin_iters.pop_back();
             if (!_origin_iters.empty()) {
                 _cur_iter = std::move(_origin_iters.back());
                 RETURN_IF_ERROR(_cur_iter->init(_read_options));
+                RETURN_IF_ERROR(trigger_prefetch(_cur_iter.get()));
             } else {
                 _cur_iter = nullptr;
             }

@@ -236,6 +236,28 @@ private:
         }
         size_t row_idx = 0;
         std::shared_ptr<VMergeIteratorContext> pre_ctx;
+
+        auto trigger_prefetch = [&](const std::shared_ptr<VMergeIteratorContext>& target) -> Status {
+            if (!target) {
+                return Status::OK();
+            }
+            auto* planner = dynamic_cast<PrefetchPlanner*>(target->iterator());
+            if (planner == nullptr) {
+                return Status::OK();
+            }
+            std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
+            bool has_more = false;
+            RETURN_IF_ERROR(planner->prepare_prefetch_batch(&pages_to_prefetch, &has_more));
+            if (pages_to_prefetch.empty()) {
+                return Status::OK();
+            }
+            return planner->submit_prefetch_batch(pages_to_prefetch);
+        };
+
+        if (!_merge_heap.empty()) {
+            RETURN_IF_ERROR(trigger_prefetch(_merge_heap.top()));
+        }
+
         while (_get_size(block) < _block_row_max) {
             if (_merge_heap.empty()) {
                 break;
@@ -275,6 +297,10 @@ private:
             RETURN_IF_ERROR(ctx->advance());
             if (ctx->valid()) {
                 _merge_heap.push(ctx);
+            }
+
+            if (!_merge_heap.empty()) {
+                RETURN_IF_ERROR(trigger_prefetch(_merge_heap.top()));
             }
         }
         if (!_merge_heap.empty()) {

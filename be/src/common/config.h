@@ -1067,8 +1067,6 @@ DECLARE_Int32(doris_remote_scanner_thread_pool_queue_size);
 DECLARE_Bool(enable_segment_iterator_prefetch);
 DECLARE_Int32(segment_iterator_prefetch_lookahead);
 DECLARE_mInt64(segment_iterator_prefetch_max_bytes);
-DECLARE_Int32(segment_iterator_prefetch_inflight_requests);
-
 // limit the queue of pending batches which will be sent by a single nodechannel
 DECLARE_mInt64(nodechannel_pending_queue_max_bytes);
 
