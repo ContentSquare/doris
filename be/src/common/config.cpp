@@ -318,6 +318,14 @@ DEFINE_Int32(segment_iterator_prefetch_lookahead, "3");
 DEFINE_Validator(segment_iterator_prefetch_lookahead, [](const int config) -> bool {
     return config >= 0;
 });
+DEFINE_mInt64(segment_iterator_prefetch_max_bytes, "33554432");
+DEFINE_Validator(segment_iterator_prefetch_max_bytes, [](const int64_t config) -> bool {
+    return config >= 0;
+});
+DEFINE_Int32(segment_iterator_prefetch_inflight_requests, "4");
+DEFINE_Validator(segment_iterator_prefetch_inflight_requests, [](const int config) -> bool {
+    return config >= 0;
+});
 
 // default thrift client connect timeout(in seconds)
 DEFINE_mInt32(thrift_connect_timeout_seconds, "3");

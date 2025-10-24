@@ -24,6 +24,7 @@
 #include <map>
 #include <memory>
 #include <queue>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -154,6 +155,8 @@ public:
 
     bool is_cur_block_finished() { return _index_in_block == _block->rows() - 1; }
 
+    RowwiseIterator* iterator() const { return _iter.get(); }
+
 private:
     // Load next block into _block
     Status _load_next_block();
@@ -183,7 +186,7 @@ private:
     mutable std::vector<bool> _pre_ctx_same_bit;
 };
 
-class VMergeIterator : public RowwiseIterator {
+class VMergeIterator : public RowwiseIterator, public PrefetchPlanner {
 public:
     // VMergeIterator takes the ownership of input iterators
     VMergeIterator(std::vector<RowwiseIteratorUPtr>&& iters, int sequence_id_idx, bool is_unique,
@@ -200,6 +203,12 @@ public:
 
     Status next_batch(Block* block) override { return _next_batch(block); }
     Status next_block_view(BlockView* block_view) override { return _next_batch(block_view); }
+
+    Status prepare_prefetch_batch(std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch,
+                                  bool* has_more) override;
+
+    Status submit_prefetch_batch(
+            const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch) override;
 
     const Schema& schema() const override { return *_schema; }
 

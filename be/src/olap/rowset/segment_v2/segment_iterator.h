@@ -116,7 +116,7 @@ struct FuncExprParams {
     std::shared_ptr<roaring::Roaring> result;
 };
 
-class SegmentIterator : public RowwiseIterator {
+class SegmentIterator : public RowwiseIterator, public PrefetchPlanner {
 public:
     SegmentIterator(std::shared_ptr<Segment> segment, SchemaSPtr schema);
     ~SegmentIterator() override;
@@ -161,6 +161,13 @@ public:
         return std::any_of(_inverted_index_iterators.begin(), _inverted_index_iterators.end(),
                            [](const auto& iterator) { return iterator != nullptr; });
     }
+
+    Status prepare_prefetch_batch(
+            std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch,
+            bool* has_more) override;
+
+    Status submit_prefetch_batch(
+            const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch) override;
 
 private:
     Status _next_batch_internal(vectorized::Block* block);
@@ -388,10 +395,13 @@ private:
 
     // Helper: Collect page offsets needed for a column given rowids
     Status _collect_pages_for_column(ColumnId cid, const std::vector<rowid_t>& sorted_rowids,
-                                     std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch);
+                                     std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch,
+                                     int64_t* newly_added_bytes = nullptr);
 
     // Helper: Issue prefetch requests to CachedRemoteFileReader
     Status _issue_prefetch_requests(const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch);
+    Status _collect_prefetch_pages(
+            std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch, bool* has_more);
 
     class BitmapRangeIterator;
     class BackwardBitmapRangeIterator;

@@ -2593,7 +2593,8 @@ uint16_t SegmentIterator::_get_next_prefetch_rowids() {
     }
 
     uint32_t nrows_read_limit =
-            std::min(cast_set<uint32_t>(_row_bitmap.cardinality()), _opts.block_row_max);
+            std::min<uint32_t>(cast_set<uint32_t>(_row_bitmap.cardinality()),
+                               static_cast<uint32_t>(_opts.block_row_max));
     uint16_t nrows_prefetch = (uint16_t)_prefetch_range_iter->read_batch_rowids(
             _block_rowids_prefetch.data(), nrows_read_limit);
 
@@ -2602,12 +2603,7 @@ uint16_t SegmentIterator::_get_next_prefetch_rowids() {
 
 Status SegmentIterator::_collect_pages_for_column(
         ColumnId cid, const std::vector<rowid_t>& sorted_rowids,
-        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch) {
-    // Skip virtual columns - they have no pages
-    if (_virtual_column_exprs.contains(cid)) {
-        return Status::OK();
-    }
-
+        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch, int64_t* newly_added_bytes) {
     // Reuse ColumnReader instances across prefetch batches
     const TabletColumn& tablet_col = _opts.tablet_schema->column(cid);
     std::shared_ptr<ColumnReader> column_reader;
@@ -2651,7 +2647,10 @@ Status SegmentIterator::_collect_pages_for_column(
     // Collect all pages from first_rowid to last_rowid
     while (page_iter.valid() && page_iter.first_ordinal() <= last_rowid) {
         const PagePointer& pp = page_iter.page();
-        pages_to_prefetch->insert({pp.offset, pp.size});
+        auto [_, inserted] = pages_to_prefetch->insert({pp.offset, pp.size});
+        if (inserted && newly_added_bytes != nullptr) {
+            *newly_added_bytes += pp.size;
+        }
 
         VLOG_DEBUG << fmt::format(
                 "Prefetch: Column {} page {} covers ordinals [{}, {}], offset={}, size={}", cid,
@@ -2695,30 +2694,53 @@ Status SegmentIterator::_issue_prefetch_requests(
     return Status::OK();
 }
 
+Status SegmentIterator::prepare_prefetch_batch(
+        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch, bool* has_more) {
+    return _collect_prefetch_pages(pages_to_prefetch, has_more);
+}
+
+Status SegmentIterator::submit_prefetch_batch(
+        const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch) {
+    return _issue_prefetch_requests(pages_to_prefetch);
+}
+
 Status SegmentIterator::_prefetch_pages_for_next_batch() {
+    std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
+    RETURN_IF_ERROR(_collect_prefetch_pages(&pages_to_prefetch, nullptr));
+    return _issue_prefetch_requests(pages_to_prefetch);
+}
+
+Status SegmentIterator::_collect_prefetch_pages(
+        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch, bool* has_more) {
     if (!config::enable_segment_iterator_prefetch ||
         config::segment_iterator_prefetch_lookahead <= 0) {
+        if (has_more != nullptr) {
+            *has_more = false;
+        }
         return Status::OK();
     }
 
+    DCHECK(pages_to_prefetch != nullptr);
+    pages_to_prefetch->clear();
+
     SCOPED_RAW_TIMER(&_opts.stats->block_init_ns);
+
+    const int64_t bytes_budget = config::segment_iterator_prefetch_max_bytes;
+    int64_t bytes_accumulated = 0;
 
     for (int lookahead = 0; lookahead < config::segment_iterator_prefetch_lookahead;
          ++lookahead) {
-        // Step 1: Read next batch of rowids using prefetch iterator
         uint16_t nrows_prefetch = _get_next_prefetch_rowids();
         if (nrows_prefetch == 0) {
             break;
         }
 
-        // Step 2: Check if rowids are contiguous (same logic as _read_columns_by_index)
         bool is_continuous = (nrows_prefetch > 1) &&
                              (_block_rowids_prefetch[nrows_prefetch - 1] -
                                       _block_rowids_prefetch[0] ==
                               nrows_prefetch - 1);
 
         if (!is_continuous) {
-            // For prefetch, only support contiguous blocks to simplify implementation
             VLOG_DEBUG << fmt::format(
                     "Prefetch: Skipping non-contiguous block (nrows={}, first={}, last={})",
                     nrows_prefetch, _block_rowids_prefetch[0],
@@ -2730,22 +2752,26 @@ Status SegmentIterator::_prefetch_pages_for_next_batch() {
                                   nrows_prefetch, _block_rowids_prefetch[0],
                                   _block_rowids_prefetch[nrows_prefetch - 1]);
 
-        // Step 3: For contiguous blocks, just use first and last rowid (no sorting needed)
         std::vector<rowid_t> rowid_range = {_block_rowids_prefetch[0],
                                             _block_rowids_prefetch[nrows_prefetch - 1]};
 
-        // Step 4: Collect unique pages needed across all predicate columns
-        std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
-
         for (auto cid : _predicate_column_ids) {
-            RETURN_IF_ERROR(_collect_pages_for_column(cid, rowid_range, &pages_to_prefetch));
+            int64_t newly_added = 0;
+            RETURN_IF_ERROR(
+                    _collect_pages_for_column(cid, rowid_range, pages_to_prefetch, &newly_added));
+            bytes_accumulated += newly_added;
+            if (bytes_budget > 0 && bytes_accumulated >= bytes_budget) {
+                break;
+            }
         }
 
-        VLOG_DEBUG << fmt::format("Prefetch: {} unique pages to prefetch",
-                                  pages_to_prefetch.size());
+        if (bytes_budget > 0 && bytes_accumulated >= bytes_budget) {
+            break;
+        }
+    }
 
-        // Step 5: Issue prefetch requests
-        RETURN_IF_ERROR(_issue_prefetch_requests(pages_to_prefetch));
+    if (has_more != nullptr) {
+        *has_more = _prefetch_range_iter && _prefetch_range_iter->has_more_range();
     }
 
     return Status::OK();

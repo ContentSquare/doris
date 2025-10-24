@@ -18,6 +18,7 @@
 #include "vec/olap/vgeneric_iterators.h"
 
 #include <algorithm>
+#include <set>
 #include <memory>
 #include <utility>
 
@@ -350,6 +351,39 @@ Status VMergeIterator::init(const StorageReadOptions& opts) {
     return Status::OK();
 }
 
+Status VMergeIterator::prepare_prefetch_batch(
+        std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch, bool* has_more) {
+    if (_merge_heap.empty()) {
+        if (has_more != nullptr) {
+            *has_more = false;
+        }
+        return Status::OK();
+    }
+
+    auto ctx = _merge_heap.top();
+    auto* planner = dynamic_cast<PrefetchPlanner*>(ctx->iterator());
+    if (planner == nullptr) {
+        if (has_more != nullptr) {
+            *has_more = false;
+        }
+        return Status::OK();
+    }
+    return planner->prepare_prefetch_batch(pages_to_prefetch, has_more);
+}
+
+Status VMergeIterator::submit_prefetch_batch(
+        const std::set<std::pair<uint64_t, uint32_t>>& pages_to_prefetch) {
+    if (_merge_heap.empty()) {
+        return Status::OK();
+    }
+    auto ctx = _merge_heap.top();
+    auto* planner = dynamic_cast<PrefetchPlanner*>(ctx->iterator());
+    if (planner == nullptr) {
+        return Status::OK();
+    }
+    return planner->submit_prefetch_batch(pages_to_prefetch);
+}
+
 // VUnionIterator will read data from input iterator one by one.
 class VUnionIterator : public RowwiseIterator {
 public:
@@ -401,6 +435,20 @@ Status VUnionIterator::init(const StorageReadOptions& opts) {
 
 Status VUnionIterator::next_batch(Block* block) {
     while (_cur_iter != nullptr) {
+        if (auto* planner = dynamic_cast<PrefetchPlanner*>(_cur_iter.get())) {
+            std::set<std::pair<uint64_t, uint32_t>> pages;
+            bool has_more = false;
+            Status st = planner->prepare_prefetch_batch(&pages, &has_more);
+            if (!st.ok()) {
+                return st;
+            }
+            if (!pages.empty()) {
+                st = planner->submit_prefetch_batch(pages);
+                if (!st.ok()) {
+                    return st;
+                }
+            }
+        }
         auto st = _cur_iter->next_batch(block);
         if (st.is<END_OF_FILE>()) {
             _origin_iters.pop_back();
