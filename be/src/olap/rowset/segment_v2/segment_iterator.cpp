@@ -2321,7 +2321,7 @@ Status SegmentIterator::_next_batch_internal(vectorized::Block* block) {
         }
     }
 #endif
-    VLOG_DEBUG << "dump block " << block->dump_data(0, block->rows());
+    // VLOG_DEBUG << "dump block " << block->dump_data(0, block->rows());
 
     return Status::OK();
 }
@@ -2593,7 +2593,7 @@ uint16_t SegmentIterator::_get_next_prefetch_rowids() {
     }
 
     uint32_t nrows_read_limit =
-            std::min(cast_set<uint32_t>(_row_bitmap.cardinality()), _opts.block_row_max);
+            std::min(cast_set<int>(_row_bitmap.cardinality()), _opts.block_row_max);
     uint16_t nrows_prefetch = (uint16_t)_prefetch_range_iter->read_batch_rowids(
             _block_rowids_prefetch.data(), nrows_read_limit);
 
@@ -2604,9 +2604,9 @@ Status SegmentIterator::_collect_pages_for_column(
         ColumnId cid, const std::vector<rowid_t>& sorted_rowids,
         std::set<std::pair<uint64_t, uint32_t>>* pages_to_prefetch) {
     // Skip virtual columns - they have no pages
-    if (_virtual_column_exprs.contains(cid)) {
-        return Status::OK();
-    }
+    // if (_virtual_column_exprs.contains(cid)) {
+    //     return Status::OK();
+    // }
 
     // Reuse ColumnReader instances across prefetch batches
     const TabletColumn& tablet_col = _opts.tablet_schema->column(cid);
@@ -2703,6 +2703,9 @@ Status SegmentIterator::_prefetch_pages_for_next_batch() {
 
     SCOPED_RAW_TIMER(&_opts.stats->block_init_ns);
 
+    // Step 4: Collect unique pages needed across all predicate columns
+    std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
+
     for (int lookahead = 0; lookahead < config::segment_iterator_prefetch_lookahead;
          ++lookahead) {
         // Step 1: Read next batch of rowids using prefetch iterator
@@ -2734,9 +2737,6 @@ Status SegmentIterator::_prefetch_pages_for_next_batch() {
         std::vector<rowid_t> rowid_range = {_block_rowids_prefetch[0],
                                             _block_rowids_prefetch[nrows_prefetch - 1]};
 
-        // Step 4: Collect unique pages needed across all predicate columns
-        std::set<std::pair<uint64_t, uint32_t>> pages_to_prefetch;
-
         for (auto cid : _predicate_column_ids) {
             RETURN_IF_ERROR(_collect_pages_for_column(cid, rowid_range, &pages_to_prefetch));
         }
@@ -2744,9 +2744,10 @@ Status SegmentIterator::_prefetch_pages_for_next_batch() {
         VLOG_DEBUG << fmt::format("Prefetch: {} unique pages to prefetch",
                                   pages_to_prefetch.size());
 
-        // Step 5: Issue prefetch requests
-        RETURN_IF_ERROR(_issue_prefetch_requests(pages_to_prefetch));
     }
+
+    // Step 5: Issue prefetch requests
+    RETURN_IF_ERROR(_issue_prefetch_requests(pages_to_prefetch));
 
     return Status::OK();
 }
