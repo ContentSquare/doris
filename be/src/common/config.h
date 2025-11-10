@@ -1183,6 +1183,8 @@ DECLARE_mInt64(file_cache_background_lru_dump_interval_ms);
 DECLARE_mInt64(file_cache_background_lru_dump_update_cnt_threshold);
 DECLARE_mInt64(file_cache_background_lru_dump_tail_record_num);
 DECLARE_mInt64(file_cache_background_lru_log_replay_interval_ms);
+DECLARE_mInt32(file_cache_num_parallel_prefetch);
+DECLARE_mInt64(file_cache_tail_read_extra_bytes_threshold);
 DECLARE_mBool(enable_evaluate_shadow_queue_diff);
 
 // inverted index searcher cache
@@ -1314,6 +1316,8 @@ DECLARE_mBool(variant_use_cloud_schema_dict_cache);
 // Threshold to estimate a column is sparsed
 // Treat invalid json format str as string, instead of throwing exception if false
 DECLARE_mBool(variant_throw_exeception_on_invalid_json);
+// Enable variant external meta
+DECLARE_mBool(enable_variant_external_meta);
 
 DECLARE_mBool(enable_merge_on_write_correctness_check);
 // USED FOR DEBUGING

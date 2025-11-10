@@ -1095,6 +1095,7 @@ DEFINE_mBool(variant_use_cloud_schema_dict_cache, "true");
 DEFINE_mDouble(variant_ratio_of_defaults_as_sparse_column, "1");
 DEFINE_mInt64(variant_threshold_rows_to_estimate_sparse_column, "2048");
 DEFINE_mBool(variant_throw_exeception_on_invalid_json, "false");
+DEFINE_mBool(enable_variant_external_meta, "true");
 
 // block file cache
 DEFINE_Bool(enable_file_cache, "false");
@@ -1153,6 +1154,13 @@ DEFINE_mInt64(file_cache_background_lru_dump_interval_ms, "60000");
 DEFINE_mInt64(file_cache_background_lru_dump_update_cnt_threshold, "1000");
 DEFINE_mInt64(file_cache_background_lru_dump_tail_record_num, "5000000");
 DEFINE_mInt64(file_cache_background_lru_log_replay_interval_ms, "1000");
+// number of prefetch parallel when the read is missed
+DEFINE_mInt32(file_cache_num_parallel_prefetch, "0");
+// if we read the tail data less than `threshold` we extend this read with extra
+// block of data, e.g. by default, if the read is the tail 10KB, the actual IO is
+// config::file_cache_each_block_size + 10KB
+// if tail read is 101KB, the actual IO is 101KB
+DEFINE_mInt64(file_cache_tail_read_extra_bytes_threshold, "102400");
 DEFINE_mBool(enable_evaluate_shadow_queue_diff, "false");
 
 DEFINE_Int32(file_cache_downloader_thread_num_min, "32");
@@ -1213,7 +1221,6 @@ DEFINE_mInt64(hdfs_write_batch_buffer_size_mb, "1"); // 1MB
 DEFINE_mBool(enable_shrink_memory, "false");
 DEFINE_mInt32(schema_cache_capacity, "1024");
 DEFINE_mInt32(schema_cache_sweep_time_sec, "100");
-
 // max number of segment cache, default -1 for backward compatibility fd_number*2/5
 DEFINE_Int32(segment_cache_capacity, "-1");
 DEFINE_Int32(segment_cache_fd_percentage, "20");

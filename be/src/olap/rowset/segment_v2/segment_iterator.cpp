@@ -308,8 +308,6 @@ Status SegmentIterator::_init_impl(const StorageReadOptions& opts) {
         _record_rowids = true;
     }
 
-    RETURN_IF_ERROR(init_iterators());
-
     if (opts.output_columns != nullptr) {
         _output_columns = *(opts.output_columns);
     }
@@ -346,6 +344,8 @@ Status SegmentIterator::_init_impl(const StorageReadOptions& opts) {
             _storage_name_and_type[i] = std::make_pair(field_name, storage_type);
         }
     }
+
+    RETURN_IF_ERROR(init_iterators());
 
     RETURN_IF_ERROR(_construct_compound_expr_context());
     _enable_common_expr_pushdown = !_common_expr_ctxs_push_down.empty();
@@ -1101,6 +1101,8 @@ Status SegmentIterator::_init_inverted_index_iterators() {
             // We use this column to locate the metadata for the inverted index, which requires a unique_id and path.
             const auto& column = _opts.tablet_schema->column(cid);
             std::vector<const TabletIndex*> inverted_indexs;
+            // Keep shared_ptr alive to prevent use-after-free when accessing raw pointers
+            TabletIndexes inverted_indexs_holder;
             // If the column is an extracted column, we need to find the sub-column in the parent column reader.
             std::shared_ptr<ColumnReader> column_reader;
             if (column.is_extracted_column()) {
@@ -1109,8 +1111,14 @@ Status SegmentIterator::_init_inverted_index_iterators() {
                     column_reader == nullptr) {
                     continue;
                 }
-                inverted_indexs = assert_cast<VariantColumnReader*>(column_reader.get())
-                                          ->find_subcolumn_tablet_indexes(column.suffix_path());
+                inverted_indexs_holder =
+                        assert_cast<VariantColumnReader*>(column_reader.get())
+                                ->find_subcolumn_tablet_indexes(column,
+                                                                _storage_name_and_type[cid].second);
+                // Extract raw pointers from shared_ptr for iteration
+                for (const auto& index_ptr : inverted_indexs_holder) {
+                    inverted_indexs.push_back(index_ptr.get());
+                }
             }
             // If the column is not an extracted column, we can directly get the inverted index metadata from the tablet schema.
             else {
@@ -1625,12 +1633,12 @@ Status SegmentIterator::_init_current_block(
     for (size_t i = 0; i < _schema->num_column_ids(); i++) {
         auto cid = _schema->column_id(i);
         const auto* column_desc = _schema->column(cid);
-        if (!_is_pred_column[cid] &&
-            !_segment->same_with_storage_type(
-                    cid, *_schema, _opts.io_ctx.reader_type != ReaderType::READER_QUERY)) {
+
+        auto file_column_type = _storage_name_and_type[cid].second;
+        auto expected_type = Schema::get_data_type_ptr(*column_desc);
+        if (!_is_pred_column[cid] && !file_column_type->equals(*expected_type)) {
             // The storage layer type is different from schema needed type, so we use storage
             // type to read columns instead of schema type for safety
-            auto file_column_type = _storage_name_and_type[cid].second;
             VLOG_DEBUG << fmt::format(
                     "Recreate column with expected type {}, file column type {}, col_name {}, "
                     "col_path {}",
@@ -1997,11 +2005,10 @@ Status SegmentIterator::_convert_to_expected_type(const std::vector<ColumnId>& c
             _is_pred_column[i]) {
             continue;
         }
-        if (!_segment->same_with_storage_type(
-                    i, *_schema, _opts.io_ctx.reader_type != ReaderType::READER_QUERY)) {
-            const Field* field_type = _schema->column(i);
-            vectorized::DataTypePtr expected_type = Schema::get_data_type_ptr(*field_type);
-            vectorized::DataTypePtr file_column_type = _storage_name_and_type[i].second;
+        const Field* field_type = _schema->column(i);
+        vectorized::DataTypePtr expected_type = Schema::get_data_type_ptr(*field_type);
+        vectorized::DataTypePtr file_column_type = _storage_name_and_type[i].second;
+        if (!file_column_type->equals(*expected_type)) {
             vectorized::ColumnPtr expected;
             vectorized::ColumnPtr original =
                     _current_return_columns[i]->assume_mutable()->get_ptr();
