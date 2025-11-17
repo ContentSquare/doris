@@ -541,6 +541,13 @@ Status NewOlapScanner::close(RuntimeState* state) {
     return Status::OK();
 }
 
+int64_t NewOlapScanner::update_io() {
+    const OlapReaderStatistics& stats = _tablet_reader->stats();
+    auto prev_io_ns = _io_ns;
+    _io_ns = stats.io_ns;
+    return _io_ns - prev_io_ns;
+}
+
 void NewOlapScanner::update_realtime_counters() {
     pipeline::OlapScanLocalState* local_state =
             static_cast<pipeline::OlapScanLocalState*>(_local_state);

@@ -28,6 +28,7 @@
 
 #include "common/config.h"
 #include "common/status.h"
+#include "common/logging.h"
 #include "olap/tablet.h"
 #include "pipeline/exec/scan_operator.h"
 #include "runtime/descriptors.h"
@@ -347,25 +348,39 @@ Status ScannerContext::get_block_from_queue(RuntimeState* state, vectorized::Blo
                 _num_finished_scanners++;
                 std::weak_ptr<ScannerDelegate> next_scanner;
                 // submit one of the remaining scanners
-                if (_scanners.try_dequeue(next_scanner)) {
-                    auto submit_status = submit_scan_task(std::make_shared<ScanTask>(next_scanner));
-                    if (!submit_status.ok()) {
-                        _process_status = submit_status;
-                        _set_scanner_done();
-                        return _process_status;
-                    }
-                } else {
-                    // no more scanner to be scheduled
-                    // `_free_blocks` serve all running scanners, maybe it's too large for the remaining scanners
-                    int free_blocks_for_each = _free_blocks.size_approx() / _num_running_scanners;
-                    _num_running_scanners--;
-                    for (int i = 0; i < free_blocks_for_each; ++i) {
-                        vectorized::BlockUPtr removed_block;
-                        if (_free_blocks.try_dequeue(removed_block)) {
-                            _block_memory_usage -= block->allocated_bytes();
-                        }
+                auto cpu_ratio = (double) _total_cpu/1000000/(_last_fetch_time - _last_scale_up_time);
+                bool scale_down=false;
+                if ((_last_fetch_time - _last_scale_up_time > SCALE_UP_DURATION) &&
+                    (_num_running_scanners > _max_thread_num)) {
+                    LOG_INFO("ScannerContext checking for scaling down;num scanners;{};cpu;{}", _num_running_scanners, cpu_ratio);
+                    if (cpu_ratio > 1.2) { // CPU usage is too high, we can scale down
+                        LOG_INFO("ScannerContext can scale down;{};cpu;{}", _num_running_scanners, cpu_ratio);
+                        _reset_scale_up_metrics();
+                        scale_down=true;
+                        _num_running_scanners--;
                     }
                 }
+                if (!scale_down) {
+                    if (_scanners.try_dequeue(next_scanner)) {
+                        auto submit_status = submit_scan_task(std::make_shared<ScanTask>(next_scanner));
+                        if (!submit_status.ok()) {
+                            _process_status = submit_status;
+                            _set_scanner_done();
+                            return _process_status;
+                        }
+                    } else {
+                        // no more scanner to be scheduled
+                        // `_free_blocks` serve all running scanners, maybe it's too large for the remaining scanners
+                        int free_blocks_for_each = _free_blocks.size_approx() / _num_running_scanners;
+                        _num_running_scanners--;
+                        for (int i = 0; i < free_blocks_for_each; ++i) {
+                            vectorized::BlockUPtr removed_block;
+                            if (_free_blocks.try_dequeue(removed_block)) {
+                                _block_memory_usage -= block->allocated_bytes();
+                            }
+                        }
+                    }
+                } 
             } else {
                 // resubmit current running scanner to read the next block
                 Status submit_status = submit_scan_task(scan_task);
@@ -392,6 +407,14 @@ Status ScannerContext::get_block_from_queue(RuntimeState* state, vectorized::Blo
     return Status::OK();
 }
 
+void ScannerContext::_reset_scale_up_metrics() {
+    // _last_wait_duration_ratio = wait_ratio;
+    _last_scale_up_time = UnixMillis();
+    _total_wait_block_time = 0;
+    _total_io = 0;
+    _total_cpu = 0;
+}
+
 Status ScannerContext::_try_to_scale_up() {
     // Four criteria to determine whether to increase the parallelism of the scanners
     // 1. It ran for at least `SCALE_UP_DURATION` ms after last scale up
@@ -399,23 +422,41 @@ Status ScannerContext::_try_to_scale_up() {
     // 3. `_free_blocks_memory_usage` < `_max_bytes_in_queue`, remains enough memory to scale up
     // 4. At most scale up `MAX_SCALE_UP_RATIO` times to `_max_thread_num`
     if (MAX_SCALE_UP_RATIO > 0 && _scanners.size_approx() > 0 &&
-        (_num_running_scanners < _max_thread_num * MAX_SCALE_UP_RATIO) &&
         (_last_fetch_time - _last_scale_up_time > SCALE_UP_DURATION) && // duration > 5000ms
+        (_num_running_scanners < _max_thread_num * MAX_SCALE_UP_RATIO) &&
         (_total_wait_block_time > (_last_fetch_time - _last_scale_up_time) *
                                           WAIT_BLOCK_DURATION_RATIO)) { // too large lock time
         double wait_ratio =
                 (double)_total_wait_block_time / (_last_fetch_time - _last_scale_up_time);
-        if (_last_wait_duration_ratio > 0 && wait_ratio > _last_wait_duration_ratio * 0.8) {
-            // when _last_wait_duration_ratio > 0, it has scaled up before.
-            // we need to determine if the scale-up is effective:
-            // the wait duration ratio after last scaling up should less than 80% of `_last_wait_duration_ratio`
+        // if (_last_wait_duration_ratio > 0 && wait_ratio > _last_wait_duration_ratio * 0.8) {
+        //     // when _last_wait_duration_ratio > 0, it has scaled up before.
+        //     // we need to determine if the scale-up is effective:
+        //     // the wait duration ratio after last scaling up should less than 80% of `_last_wait_duration_ratio`
+        //     return Status::OK();
+        // }
+
+        // DO SOMETHING LIKE
+        // * allow increase num scalers is cpu ratio is < 1
+        // * decrease if cpu ratio is >1.2 & num scanners > max scanners
+        auto io_ratio = _total_cpu==0 ? 0 : (double)_total_io / _total_cpu;
+        auto cpu_ratio = (double) _total_cpu/1000000/(_last_fetch_time - _last_scale_up_time);
+        LOG_INFO("ScannerContext checking io ratio;num scanners;{};time;{};wait_ratio;{};cpu;{};io;{};cpu ratio;{};io ratio;{}",
+            _num_running_scanners, _last_fetch_time - _last_scale_up_time, wait_ratio, _total_cpu, _total_io,
+            cpu_ratio, io_ratio);
+        if (io_ratio < 1 || cpu_ratio > 1) {
+            _reset_scale_up_metrics();
             return Status::OK();
         }
-
+        // if (_num_running_scanners >= _max_thread_num * MAX_SCALE_UP_RATIO) {
+        //     _reset_scale_up_metrics();
+        //     return Status::OK();
+        // } 
         bool is_scale_up = false;
         // calculate the number of scanners that can be scheduled
         int num_add = int(std::min(_num_running_scanners * SCALE_UP_RATIO,
                                    _max_thread_num * MAX_SCALE_UP_RATIO - _num_running_scanners));
+        LOG_INFO("ScannerContext is scaling up;num scanners;{};num_add;{};wait_ratio;{};cpu;{};io;{};ratio;{}",
+            _num_running_scanners, num_add, wait_ratio, _total_cpu, _total_io, _total_io/_total_cpu);
         if (_estimated_block_size > 0) {
             int most_add = (_max_bytes_in_queue - _block_memory_usage) / _estimated_block_size;
             num_add = std::min(num_add, most_add);
@@ -437,9 +478,11 @@ Status ScannerContext::_try_to_scale_up() {
         }
 
         if (is_scale_up) {
-            _last_wait_duration_ratio = wait_ratio;
+            // _last_wait_duration_ratio = wait_ratio;
             _last_scale_up_time = UnixMillis();
             _total_wait_block_time = 0;
+            _total_io = 0;
+            _total_cpu = 0;
         }
     }
 

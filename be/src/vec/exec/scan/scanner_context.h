@@ -157,6 +157,9 @@ public:
 
     int batch_size() const { return _batch_size; }
 
+    void inc_cpu_time(int64_t cpu_add) { _total_cpu += cpu_add; }
+    void inc_io_time(int64_t io_add) { _total_io += io_add; }
+
     // the unique id of this context
     std::string ctx_id;
     TUniqueId _query_id;
@@ -172,6 +175,7 @@ protected:
     /// 4. At most scale up `MAX_SCALE_UP_RATIO` times to `_max_thread_num`
     void _set_scanner_done();
     Status _try_to_scale_up();
+    void _reset_scale_up_metrics();
 
     RuntimeState* _state = nullptr;
     pipeline::ScanLocalStateBase* _local_state = nullptr;
@@ -223,10 +227,12 @@ protected:
     int64_t _last_fetch_time = 0;
     int64_t _total_wait_block_time = 0;
     double _last_wait_duration_ratio = 0;
-    const int64_t SCALE_UP_DURATION = 5000; // 5000ms
+    const int64_t SCALE_UP_DURATION = 3000; // 3000ms
     const float WAIT_BLOCK_DURATION_RATIO = 0.5;
-    const float SCALE_UP_RATIO = 0.5;
+    const float SCALE_UP_RATIO = 1.0;
     float MAX_SCALE_UP_RATIO;
+    int64_t _total_cpu = 0;
+    int64_t _total_io = 0;
 };
 } // namespace vectorized
 } // namespace doris

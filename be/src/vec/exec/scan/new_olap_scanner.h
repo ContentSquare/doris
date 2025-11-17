@@ -78,6 +78,7 @@ public:
     doris::TabletStorageType get_storage_type() override;
 
     void update_realtime_counters() override;
+    int64_t update_io() override;
 
 protected:
     Status _get_block_impl(RuntimeState* state, Block* block, bool* eos) override;
@@ -102,6 +103,7 @@ private:
 
     // ========= profiles ==========
     bool _profile_updated = false;
+    int64_t _io_ns=0;
 };
 } // namespace vectorized
 } // namespace doris
