@@ -18,7 +18,7 @@
 ---
 name: License Check
 on:
-  pull_request_target:
+  pull_request:
   push:
     branches:
       - master
