@@ -21,7 +21,6 @@ name: Code Formatter
 
 on:
   pull_request:
-  pull_request_target:
   workflow_dispatch:
   issue_comment:
     types: [ created ]
